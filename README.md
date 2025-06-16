@@ -30,17 +30,3 @@ https://pdfreading.streamlit.app/
 5. Rouge scores are computed between the response and context as a quality metric.
 
 ---
-
-## Installation
-
-Make sure you have Python 3.8+ installed. Then:
-
-```bash
-git clone https://github.com/aartiksaini/pdf_reading_using_RAG.git
-cd pdf_reading_using_RAG
-python -m venv .venv
-# On Windows
-.venv\Scripts\activate
-# On macOS/Linux
-source .venv/bin/activate
-pip install -r requirements.txt
