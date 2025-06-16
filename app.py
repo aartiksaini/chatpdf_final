@@ -56,7 +56,7 @@ def create_ui():
                 os.remove(temp_path)
 
     st.markdown("---")
-    st.markdown("**Powered by**: Rohitash Bishnoi")
+    st.markdown("**Powered by**: Aartik Saini")
 
 def main():
     create_ui()
