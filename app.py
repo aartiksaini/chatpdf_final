@@ -1,62 +1,81 @@
 import streamlit as st
-from Helper import user_input
+from PyPDF2 import PdfReader
+from langchain.text_splitter import CharacterTextSplitter
+from langchain.embeddings import HuggingFaceEmbeddings
+from langchain.vectorstores import FAISS
+from langchain.llms import HuggingFaceHub
+from langchain.chains.question_answering import load_qa_chain
 import evaluate
 import os
 
+# Load once to avoid multiple downloads
+embeddings = HuggingFaceEmbeddings(model_name="sentence-transformers/all-MiniLM-L6-v2")
+llm = HuggingFaceHub(repo_id="google/flan-t5-base", model_kwargs={"temperature": 0.2, "max_length": 512})
+
+def process_pdf(pdf_path):
+    pdf_reader = PdfReader(pdf_path)
+    raw_text = ""
+
+    for page in pdf_reader.pages:
+        text = page.extract_text()
+        if text:
+            raw_text += text
+
+    text_splitter = CharacterTextSplitter(
+        separator="\n", chunk_size=800, chunk_overlap=200, length_function=len
+    )
+    chunks = text_splitter.split_text(raw_text)
+
+    return chunks
+
+def create_vector_store(text_chunks):
+    return FAISS.from_texts(text_chunks, embedding=embeddings)
+
+def ask_question(question, pdf_path):
+    chunks = process_pdf(pdf_path)
+    vector_store = create_vector_store(chunks)
+    docs = vector_store.similarity_search(question)
+    chain = load_qa_chain(llm, chain_type="stuff")
+    response = chain.run(input_documents=docs, question=question)
+    return response, docs
+
 def create_ui():
-    st.title("PDF made easy!")
-    st.sidebar.write("### Welcome to PDF made easy!")
-    st.sidebar.write("Ask a question below and get instant insights.")
+    st.title("📄 PDF made easy!")
+    st.sidebar.write("### Upload a PDF and ask any question.")
+    st.markdown("1. Upload a PDF file.\n2. Enter your question.\n3. Click 'Submit'.")
 
-    st.markdown("### Instructions")
-    st.markdown("""
-    1. Upload a PDF file.
-    2. Enter your question in the text box below.
-    3. Click on 'Submit' to get the response.
-    """)
-
-    # Step 1: Upload PDF
     uploaded_file = st.file_uploader("Upload a PDF file", type=["pdf"])
-    
-    # Step 2: Ask a question
     question = st.text_input("Ask a question:")
 
-    # Step 3: Submit button
     if st.button("Submit"):
-        if uploaded_file is None:
+        if not uploaded_file:
             st.error("Please upload a PDF first.")
-        elif question.strip() == "":
+        elif not question.strip():
             st.error("Please enter a question.")
         else:
-            with st.spinner("Generating response..."):
-                # Save uploaded file temporarily
-                temp_path = os.path.join("temp_uploaded.pdf")
+            with st.spinner("Processing..."):
+                temp_path = "temp_uploaded.pdf"
                 with open(temp_path, "wb") as f:
                     f.write(uploaded_file.read())
-                
-                # Call your helper function (make sure it returns response and context_docs)
-                response, context_docs = user_input(question, temp_path)
 
-                # Load ROUGE metric
-                rouge = evaluate.load('rouge')
+                response, context_docs = ask_question(question, temp_path)
 
-                output_text = response.get('output_text', 'No response')
+                # ROUGE scoring
+                rouge = evaluate.load("rouge")
+                output_text = response
                 context = ' '.join([doc.page_content for doc in context_docs])
-
-                # Compute ROUGE score
                 results = rouge.compute(predictions=[output_text], references=[context])
 
-                st.success("Response:")
+                st.success("Answer:")
                 st.write(output_text)
 
                 st.success("ROUGE score:")
-                st.write(results)
+                st.json(results)
 
-                # Cleanup temporary file
                 os.remove(temp_path)
 
     st.markdown("---")
-    st.markdown("**Powered by**: Aartik Saini")
+    st.caption("Built by Aartik Saini")
 
 def main():
     create_ui()
