@@ -3,21 +3,17 @@ from PyPDF2 import PdfReader
 from langchain.text_splitter import CharacterTextSplitter
 from langchain.embeddings import HuggingFaceEmbeddings
 from langchain.vectorstores import FAISS
-from langchain.llms import HuggingFaceHub
 from langchain.chains.question_answering import load_qa_chain
+from langchain_community.llms import HuggingFaceHub
 import evaluate
 import os
 
-# Load once to avoid multiple downloads
+# Initialize once
 embeddings = HuggingFaceEmbeddings(model_name="sentence-transformers/all-MiniLM-L6-v2")
-
-from langchain_community.llms import HuggingFaceHub
-
 llm = HuggingFaceHub(
     repo_id="google/flan-t5-base",
     model_kwargs={"max_length": 512}
 )
-
 
 def process_pdf(pdf_path):
     pdf_reader = PdfReader(pdf_path)
@@ -32,7 +28,6 @@ def process_pdf(pdf_path):
         separator="\n", chunk_size=800, chunk_overlap=200, length_function=len
     )
     chunks = text_splitter.split_text(raw_text)
-
     return chunks
 
 def create_vector_store(text_chunks):
@@ -47,6 +42,7 @@ def ask_question(question, pdf_path):
     return response, docs
 
 def create_ui():
+    st.set_page_config(page_title="PDF Q&A App", page_icon="📄")
     st.title("📄 PDF made easy!")
     st.sidebar.write("### Upload a PDF and ask any question.")
     st.markdown("1. Upload a PDF file.\n2. Enter your question.\n3. Click 'Submit'.")
@@ -65,21 +61,26 @@ def create_ui():
                 with open(temp_path, "wb") as f:
                     f.write(uploaded_file.read())
 
-                response, context_docs = ask_question(question, temp_path)
+                try:
+                    response, context_docs = ask_question(question, temp_path)
 
-                # ROUGE scoring
-                rouge = evaluate.load("rouge")
-                output_text = response
-                context = ' '.join([doc.page_content for doc in context_docs])
-                results = rouge.compute(predictions=[output_text], references=[context])
+                    if response:
+                        # ROUGE scoring
+                        rouge = evaluate.load("rouge")
+                        context = ' '.join([doc.page_content for doc in context_docs])
+                        results = rouge.compute(predictions=[response], references=[context])
 
-                st.success("Answer:")
-                st.write(output_text)
+                        st.success("Answer:")
+                        st.write(response)
 
-                st.success("ROUGE score:")
-                st.json(results)
-
-                os.remove(temp_path)
+                        st.success("ROUGE Score:")
+                        st.json(results)
+                    else:
+                        st.warning("No response generated. Try a different question.")
+                except Exception as e:
+                    st.error(f"An error occurred: {e}")
+                finally:
+                    os.remove(temp_path)
 
     st.markdown("---")
     st.caption("Built by Aartik Saini")
@@ -89,4 +90,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-
