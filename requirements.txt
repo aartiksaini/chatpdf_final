@@ -1,10 +1,8 @@
-requests
-evaluate
-langchain_community
-langchain
+streamlit
 PyPDF2
-bs4
+langchain
+langchain_community
 langchain_google_genai
 google-generativeai
 faiss-cpu
-streamlit
+python-dotenv
