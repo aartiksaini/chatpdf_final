@@ -10,7 +10,14 @@ import os
 
 # Load once to avoid multiple downloads
 embeddings = HuggingFaceEmbeddings(model_name="sentence-transformers/all-MiniLM-L6-v2")
-llm = HuggingFaceHub(repo_id="google/flan-t5-base", model_kwargs={"temperature": 0.2, "max_length": 512})
+
+from langchain_community.llms import HuggingFaceHub
+
+llm = HuggingFaceHub(
+    repo_id="google/flan-t5-base",
+    model_kwargs={"max_length": 512}
+)
+
 
 def process_pdf(pdf_path):
     pdf_reader = PdfReader(pdf_path)
@@ -82,3 +89,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+
