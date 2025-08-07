@@ -19,7 +19,7 @@ print(f"Using API key: {google_api_key}")
 genai.configure(api_key=google_api_key)
 
 try:
-    model = genai.GenerativeModel("models/gemini-1.5-flash-latest")
+    model = genai.GenerativeModel("gemini-pro")
     response = model.generate_content("Hello")
     print(response.text)
 except Exception as e:
@@ -98,3 +98,4 @@ def user_input(user_question, pdf_path):
     )
 
     return response, docs
+
