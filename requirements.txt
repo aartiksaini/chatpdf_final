@@ -1,10 +1,11 @@
 requests
 evaluate
-langchain_community
 langchain
-PyPDF2
-bs4
+langchain_community
 langchain_google_genai
 google-generativeai
+PyPDF2
+bs4
 faiss-cpu
 streamlit
+sentence-transformers
