@@ -58,7 +58,7 @@ def main():
                                 "type": uploaded_file.type if hasattr(uploaded_file, 'type') else 'unknown'
                             }
                             st.success(f"✅ {uploaded_file.name} uploaded successfully!")
-                            
+                          
                         except Exception as e:
                             st.error(f"❌ Error processing {uploaded_file.name}: {str(e)}")
                             # Continue processing other files even if one fails
@@ -99,7 +99,7 @@ def main():
         st.header("💬 AI Chat Assistant")
 
         # Check if Gemini API key is available
-        api_key = os.getenv("GEMINI_API_KEY") or st.secrets.get("GEMINI_API_KEY")
+        api_key =st.secrets.get("GEMINI_API_KEY")
         if not api_key:
             st.warning("⚠️ GEMINI_API_KEY not found in environment variables. Please set it to use the chat feature.")
             return
@@ -187,6 +187,7 @@ def main():
 
 if __name__ == "__main__":
     main()
+
 
 
 
