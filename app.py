@@ -99,7 +99,7 @@ def main():
         st.header("💬 AI Chat Assistant")
 
         # Check if Gemini API key is available
-        api_key = os.getenv("GEMINI_API_KEY", "")
+        api_key = os.getenv("GEMINI_API_KEY") or st.secrets.get("GEMINI_API_KEY")
         if not api_key:
             st.warning("⚠️ GEMINI_API_KEY not found in environment variables. Please set it to use the chat feature.")
             return
@@ -187,5 +187,6 @@ def main():
 
 if __name__ == "__main__":
     main()
+
 
 
