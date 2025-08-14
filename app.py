@@ -1,7 +1,7 @@
 import streamlit as st
 import os
 from file_processor import FileProcessor
-from chat_manager import ChatManager
+from Helper import ChatManager
 
 # Configure page
 st.set_page_config(page_title="Multi-File Upload & AI Chat",
@@ -187,3 +187,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+
