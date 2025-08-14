@@ -1,106 +1,144 @@
 import os
-from PyPDF2 import PdfReader
+from typing import List, Dict
 import streamlit as st
-from dotenv import load_dotenv
 
-from langchain_community.vectorstores import FAISS
-from langchain.prompts import PromptTemplate
-from langchain.text_splitter import RecursiveCharacterTextSplitter
-from langchain_google_genai import GoogleGenerativeAIEmbeddings, ChatGoogleGenerativeAI
-from langchain.chains.question_answering import load_qa_chain
-import google.generativeai as genai
+try:
+    import google.generativeai as genai
+    GEMINI_AVAILABLE = True
+except ImportError:
+    GEMINI_AVAILABLE = False
 
-# Load environment variables
-load_dotenv()
-google_api_key = os.getenv("GOOGLE_API_KEY")
-genai.configure(api_key=google_api_key)
-
-# PDF text extractor
-def extract_text_from_pdf(pdf_file):
-    pdf_reader = PdfReader(pdf_file)
-    all_text = ""
-    for page in pdf_reader.pages:
-        text = page.extract_text()
-        if text:
-            all_text += text.encode('ascii', 'ignore').decode('ascii') + "\n"
-    return all_text
-
-# Splitter
-def get_text_chunks(text):
-    splitter = RecursiveCharacterTextSplitter(chunk_size=10000, chunk_overlap=1000)
-    return splitter.split_text(text)
-
-# Embedding & Vector Store
-def get_vector_store(text_chunks):
-    embeddings = GoogleGenerativeAIEmbeddings(
-        google_api_key=google_api_key,
-        model="models/embedding-001"
-    )
-    return FAISS.from_texts(text_chunks, embedding=embeddings)
-
-# QA Chain
-def get_conversational_chain():
-    prompt_template = """
-    Answer the question as detailed as possible from the provided context.
-    If the answer is not in the context, just say "answer is not available in the context".
-
-    Context:
-    {context}
-
-    Question:
-    {question}
-
-    Answer:
-    """
-
-    model = ChatGoogleGenerativeAI(
-        google_api_key=google_api_key,
-        model="gemini-pro",
-        temperature=0.3
-    )
-
-    prompt = PromptTemplate(
-        template=prompt_template,
-        input_variables=["context", "question"]
-    )
-
-    return load_qa_chain(model, chain_type="stuff", prompt=prompt)
-
-# Streamlit App
-st.set_page_config(page_title="PDF Q&A with Gemini", layout="wide")
-st.title("📄 Chat with your PDF using Gemini")
-
-uploaded_file = st.file_uploader("Upload your PDF", type="pdf")
-
-if uploaded_file:
-    user_question = st.text_input("Ask a question about the PDF:")
-
-    if user_question:
-        with st.spinner("Processing..."):
-            # Step 1: Extract
-            raw_text = extract_text_from_pdf(uploaded_file)
-
-            # Step 2: Chunking
-            text_chunks = get_text_chunks(raw_text)
-
-            # Step 3: Vector store
-            vectorstore = get_vector_store(text_chunks)
-
-            # Step 4: Similar documents
-            docs = vectorstore.similarity_search(user_question)
-
-            # Step 5: QA chain
-            chain = get_conversational_chain()
-            result = chain(
-                {"input_documents": docs, "question": user_question},
-                return_only_outputs=True
-            )
-
-            # Step 6: Output
-            st.subheader("Answer:")
-            st.write(result["output_text"])
-
-            with st.expander("📚 Show Relevant Context"):
-                for i, doc in enumerate(docs):
-                    st.markdown(f"**Chunk {i+1}:**")
-                    st.write(doc.page_content)
+class ChatManager:
+    """Manages chat interactions with Google Gemini AI."""
+    
+    def __init__(self):
+        self.model = None
+        self.chat = None
+        self._initialized = False
+        
+    def initialize(self, api_key: str):
+        """
+        Initialize the Gemini AI model with API key.
+        
+        Args:
+            api_key: Google Gemini API key
+        """
+        if not GEMINI_AVAILABLE:
+            raise Exception("Google Generative AI library not available. Please install google-generativeai.")
+        
+        try:
+            # Configure the API key
+            genai.configure(api_key=api_key)
+            
+            # Initialize the model
+            self.model = genai.GenerativeModel('gemini-1.5-flash')
+            
+            # Start a chat session
+            self.chat = self.model.start_chat(history=[])
+            
+            self._initialized = True
+            
+        except Exception as e:
+            raise Exception(f"Failed to initialize Gemini AI: {str(e)}")
+    
+    def is_initialized(self) -> bool:
+        """Check if the chat manager is initialized."""
+        return self._initialized
+    
+    def get_response(self, message: str, conversation_history: List[Dict[str, str]] = None) -> str:
+        """
+        Get AI response for a given message.
+        
+        Args:
+            message: User message
+            conversation_history: Previous conversation history
+            
+        Returns:
+            str: AI response
+        """
+        if not self._initialized:
+            raise Exception("ChatManager not initialized. Call initialize() first.")
+        
+        try:
+            # Create a system prompt to guide the AI behavior
+            system_prompt = """You are a helpful AI assistant that can analyze and discuss uploaded files. 
+            You have access to the content of files that users have uploaded. When responding:
+            1. Be helpful and informative
+            2. Reference specific content from uploaded files when relevant
+            3. Ask clarifying questions if needed
+            4. Provide detailed explanations when analyzing file content
+            5. Be concise but thorough in your responses
+            
+            If the user asks about files but no file content is provided, let them know you don't see any uploaded files.
+            """
+            # Prepare the conversation context
+            if conversation_history:
+                # Create a new chat with history for context
+                history = []
+                for msg in conversation_history:
+                    if msg["role"] == "user":
+                        history.append({
+                            "role": "user",
+                            "parts": [msg["content"]]
+                        })
+                    else:
+                        history.append({
+                            "role": "model",
+                            "parts": [msg["content"]]
+                        })
+                
+                # Create a new chat with history
+                chat_with_history = self.model.start_chat(history=history)
+                response = chat_with_history.send_message(system_prompt + "\n\nUser: " + message)
+            else:
+                # First message or no history
+                response = self.chat.send_message(system_prompt + "\n\nUser: " + message)
+            
+            return response.text
+            
+        except Exception as e:
+            # Handle different types of errors
+            error_message = str(e).lower()
+            
+            if "api key" in error_message:
+                raise Exception("Invalid or expired API key. Please check your GEMINI_API_KEY.")
+            elif "quota" in error_message or "limit" in error_message:
+                raise Exception("API quota exceeded. Please try again later.")
+            elif "blocked" in error_message:
+                raise Exception("Message was blocked by safety filters. Please rephrase your message.")
+            else:
+                raise Exception(f"Error getting AI response: {str(e)}")
+    
+    def clear_conversation(self):
+        """Clear the conversation history."""
+        if self._initialized:
+            self.chat = self.model.start_chat(history=[])
+    
+    def get_model_info(self) -> Dict[str, str]:
+        """Get information about the current model."""
+        if not self._initialized:
+            return {"status": "Not initialized"}
+        
+        return {
+            "model": "gemini-1.5-flash",
+            "status": "Initialized",
+            "provider": "Google Generative AI"
+        }
+    
+    @staticmethod
+    def is_gemini_available() -> bool:
+        """Check if Gemini library is available."""
+        return GEMINI_AVAILABLE
+    
+    @staticmethod
+    def get_setup_instructions() -> str:
+        """Get setup instructions for Gemini API."""
+        return """
+        To use the Gemini AI chat feature:
+        
+        1. Get a Gemini API key from Google AI Studio (https://makersuite.google.com/app/apikey)
+        2. Set the environment variable: GEMINI_API_KEY=your_api_key_here
+        3. Make sure google-generativeai is installed: pip install google-generativeai
+        
+        The application will automatically use the API key from the environment variable.
+        """
