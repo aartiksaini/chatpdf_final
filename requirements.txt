@@ -1,11 +1,6 @@
 streamlit
+pandas
+openpyxl
+python-docx
 PyPDF2
-langchain
-langchain_community
-langchain_google_genai
 google-generativeai
-sentence-transformers
-faiss-cpu
-evaluate
-bs4
-requests
